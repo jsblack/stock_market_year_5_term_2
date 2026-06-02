@@ -1,0 +1,165 @@
+
+
+<div class="ticker-wrap">
+  <div class="ticker-label">MARKET</div>
+  <div style="overflow:hidden;">
+    <div class="ticker-track" id="tickerTrack">
+      <span class="ticker-item"><span class="tname">Load a CSV file to begin</span></span>
+    </div>
+  </div>
+</div>
+
+
+  <div class="logo-area">
+    <div class="logo-icon">
+      
+        
+        
+      
+    </div>
+    <h1>Year 5 Stock Market Simulation
+      <span id="headerSub">Load your CSV to get started</span>
+    </h1>
+  </div>
+  
+    ↑ Load CSV
+  
+  <input type="file" id="fileInput" />
+
+
+<div class="selector-wrap" id="selectorWrap" style="display:none;">
+  <div class="selector-label">Select team</div>
+  <div class="team-pills" id="teamPills"></div>
+</div>
+
+<div id="mainContent">
+  <div class="upload-zone" id="uploadZone">
+    <div class="upload-icon">📊</div>
+    <h2>Drop your CSV file here</h2>
+    <p>or click the <strong>Load CSV</strong> button above<br />to open the file picker</p>
+    <div class="hint">Export from Google Sheets: File → Download → CSV</div>
+  </div>
+</div>
+
+<div class="main" id="dashboard" style="display:none;"></div>
+
+
+  <span>Year 5 Stock Market Simulation — Arbitrage Axiom 🤖</span>
+  <span id="footerFile">No file loaded</span>
+
+
+
+    <div class="two-col">
+      <div class="panel">
+        <div class="panel-header" id="chartTitle">Holdings by stock</div>
+        <div class="panel-body"><div class="chart-wrap"></div></div>
+      </div>
+      <div class="panel">
+        <div class="panel-header" id="rightTitle">Market share</div>
+        <div class="panel-body" id="rightBody"></div>
+      </div>
+    </div>
+    <div class="panel">
+      <div class="panel-header">All teams — full overview</div>
+      <div class="panel-body" style="padding:0;"><div class="table-scroll"></div></div>
+    </div>`;
+  renderMetrics();
+  renderChart();
+  renderRight();
+  renderTable();
+}
+
+function renderMetrics() {
+  const el = document.getElementById('metrics');
+  if (activeTeam === null) {
+    const biggest = teams.reduce((a, b) =&gt; b.total &gt; a.total ? b : a);
+    const topIdx = totals.indexOf(Math.max(...totals));
+    el.innerHTML =
+      metric('Total securities', grandTotal.toLocaleString(), `across ${teams.length} teams`, true) +
+      metric('Most held stock', stocks[topIdx], `${totals[topIdx].toLocaleString()} units`) +
+      metric('Largest portfolio', biggest.name, `${biggest.total.toLocaleString()} units`) +
+      metric('Stocks listed', stocks.length, 'companies');
+  } else {
+    const t = teams[activeTeam];
+    const held = t.holdings.filter(h =&gt; h &gt; 0).length;
+    const topIdx = t.holdings.indexOf(Math.max(...t.holdings));
+    const mktShare = grandTotal &gt; 0 ? ((t.total / grandTotal) * 100).toFixed(1) : '0.0';
+    el.innerHTML =
+      metric('Portfolio total', t.total.toLocaleString(), `${mktShare}% of market`, true) +
+      metric('Stocks held', held, `of ${stocks.length} available`) +
+      metric('Biggest position', stocks[topIdx] || '—', topIdx &gt;= 0 ? `${t.holdings[topIdx].toLocaleString()} units` : '') +
+      metric('Team', t.sub || t.name, t.isAI ? '🤖 AI competitor' : 'student team');
+  }
+}
+
+function metric(label, value, sub, gold = false) {
+  return `<div class="metric"><div class="metric-label">${label}</div><div class="metric-value${gold?' gold':''}">${value}</div><div class="metric-sub">${sub}</div></div>`;
+}
+
+function renderChart() {
+  const ctx = document.getElementById('portfolioChart');
+  if (!ctx) return;
+  if (portfolioChart) { portfolioChart.destroy(); portfolioChart = null; }
+  const isAll = activeTeam === null;
+  const data = isAll ? totals : teams[activeTeam].holdings;
+  const colors = stocks.map((_, i) =&gt; (!isAll &amp;&amp; data[i] === 0) ? 'rgba(255,255,255,0.07)' : STOCK_COLORS[i % STOCK_COLORS.length]);
+  document.getElementById('chartTitle').textContent = isAll ? 'Total market holdings by stock' : `${teams[activeTeam].name} — by stock`;
+  portfolioChart = new Chart(ctx, {
+    type: 'bar',
+    data: { labels: stocks, datasets: [{ data, backgroundColor: colors, borderRadius: 4, borderSkipped: false }] },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false },
+        tooltip: { backgroundColor: '#112848', titleColor: '#8892a4', bodyColor: '#ffd166', borderColor: 'rgba(255,255,255,0.1)', borderWidth: 1, callbacks: { label: c =&gt; ` ${c.parsed.y.toLocaleString()} units` } }
+      },
+      scales: {
+        x: { grid: { display: false }, ticks: { color: '#8892a4', font: { size: 10, family: "'DM Mono',monospace" }, autoSkip: false, maxRotation: 40 } },
+        y: { grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#8892a4', font: { size: 10, family: "'DM Mono',monospace" }, callback: v =&gt; v.toLocaleString() } }
+      }
+    }
+  });
+}
+
+function renderRight() {
+  const title = document.getElementById('rightTitle');
+  const body = document.getElementById('rightBody');
+  if (activeTeam === null) {
+    title.textContent = 'Market share by team';
+    const sorted = [...teams].sort((a, b) =&gt; b.total - a.total);
+    body.innerHTML = sorted.map(t =&gt; {
+      const pct = grandTotal &gt; 0 ? ((t.total / grandTotal) * 100) : 0;
+      const color = t.isAI ? '#22c97a' : '#e8a820';
+      return `<div style="margin-bottom:12px;">
+        <div style="margin-bottom:4px;font-size:12px;">
+          <span>${t.name}${t.isAI?' 🤖':''}</span>
+          <span>${pct.toFixed(1)}%</span>
+        </div>
+        <div style="height:5px;background:rgba(255,255,255,0.07);overflow:hidden;">
+          <div style="height:100%;"></div>
+        </div>
+      </div>`;
+    }).join('');
+  } else {
+    const t = teams[activeTeam];
+    title.textContent = 'Stock breakdown';
+    body.innerHTML = `<div class="chips">${stocks.map((s, i) =&gt; {
+      const held = t.holdings[i] &gt; 0;
+      return `<div class="chip ${held?'held':'empty'}"><div class="chip-name">${s}</div><div class="chip-val">${held ? t.holdings[i].toLocaleString() : '—'}</div></div>`;
+    }).join('')}</div>`;
+  }
+}
+
+function renderTable() {
+  const table = document.getElementById('overviewTable');
+  if (!table) return;
+  table.innerHTML = `
+    Team${s.split(' ')[0]}Total
+    
+      ${t.name}${t.isAI?' 🤖':''}${h.toLocaleString()}—${t.total.toLocaleString()}
+    
+    Market total${v.toLocaleString()}${grandTotal.toLocaleString()}`;
+}
+
+function mk(tag, cls, text) { const el = document.createElement(tag); el.className = cls; el.textContent = text; return el; }
+
